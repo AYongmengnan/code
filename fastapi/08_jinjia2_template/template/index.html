@@ -1,0 +1,22 @@
+<html>
+    <body>
+        <p>
+            用户名：{{user|title}}
+            <br>
+            电子邮件：{{email}}
+            <br>
+            联系电话：{{phones.0}}
+            <br>
+            年龄：{{info.age}}
+            <br>
+            地址：{{info.address}}
+        </p>
+        {% if num_id > 1%}
+        <ul>
+            {% for job in jobs %}
+            <li>{{ job }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </body>
+</html>

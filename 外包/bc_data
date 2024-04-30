@@ -1,0 +1,132 @@
+import datetime
+import time
+from urllib.parse import urljoin
+from parsel import Selector
+import pymysql
+import redis
+import requests
+
+def get_url():
+    links = []
+    sql1 = 'SELECT PAGE_LINK FROM pre_items_solarbio WHERE LENGTH(Mole_Formula) < 4'
+    sql2 = "SELECT PAGE_LINK FROM pre_items_solarbio WHERE FACTORY_CATE NOT LIKE '%首页%'"
+    cursor.execute(sql1)
+    result1 = cursor.fetchall()
+    cursor.execute(sql2)
+    result2 = cursor.fetchall()
+    if result1:
+        for res1 in result1:
+            links.append(res1[0])
+    if result2:
+        for res2 in result2:
+            links.append(res2[0])
+    # print(links)
+    print(len(set(links)))
+    r.rpush("links", *list(set(links)))
+
+
+def parse_detail(url):
+    url_exists = r.sismember('link_is_save', url)
+    if url_exists:
+        return
+    try:
+        response = requests.get(url=url,headers=headers,verify=False,timeout=10)
+    except Exception as e:
+        print('*' * 20)
+        print('获取详情错误',e)
+        time.sleep(10)
+        # return parse_detail(url)
+        return
+    html = Selector(text=response.text)
+    FACTORY_CATE = html.xpath('//div[@class="Navigation"]').xpath('string(.)').get()
+    FACTORY_CATE = FACTORY_CATE.replace(' ','').replace('当前位置:','') if FACTORY_CATE else None
+    # print(sku_data)
+    data = html.xpath('//div[@class="relatedDistTop"]/div//tr')
+    Mole_Formula = None
+    if data:
+        for da in data:
+            k = da.xpath('td[1]').xpath('string(.)').get()
+            v = da.xpath('td[2]').xpath('string(.)').get()
+            if k and v:
+                fields = key_data.get(k.strip())
+                if fields and k == '分子式':
+                    Mole_Formula = v
+                    break
+    print(FACTORY_CATE,Mole_Formula,url)
+    sql = "update pre_items_solarbio set FACTORY_CATE=%s,Mole_Formula=%s where PAGE_LINK=%s"
+    res = cursor.execute(sql,(FACTORY_CATE,Mole_Formula,url))
+    print('更新结果')
+    db.commit()
+    r.sadd('link_is_save',url)
+    return
+
+
+
+if __name__ == "__main__":
+    db = pymysql.connect(
+        host="47.102.145.175",
+        user="user_momobei",
+        password="ad5kf2d9sd!r3#e",
+        database="momobei",
+        port=3306,
+    )
+    headers = {
+        'User-Agent':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'
+    }
+    key_data = {
+                '序列号': 'SEQ_NUM',
+                '任务号': 'TASK_NAME',
+                '货号': 'SKU_ID',
+                'CAS': 'CAS_ID',
+                '品牌ID': 'BRAND_ID',
+                '厂家类目': 'FACTORY_CATE',
+                '中文名称': 'CNAME',
+                '英文名称': 'ENAME',
+                '中文别名': 'CALIAS',
+                '英文别名': 'EALIAS',
+                '目录价格': 'LIST_PRICE',
+                '规格总计': 'PACKING_TOTAL',
+                '规格数量': 'PACKING_NUM',
+                '规格单位': 'PACKING_UNIT',
+                '纯度规格': 'PURITY',
+                '纯度': 'PURITY',
+                '库存类型': 'STORAGE_TYPE',
+                '发货时效': 'DELIVER_DURATION',
+                'MSDS': 'MSDS',
+                '规格说明书': 'COA',
+                '厂家商品页链接': 'PAGE_LINK',
+                '运输类型': 'SHIPPING_TYPE',
+                '分子式': 'Mole_Formula',
+                '结构式': 'Stru_Formula',
+                '分子量': 'Mole_Weight',
+                '熔点': 'MP',
+                '沸点': 'BP',
+                '密度': 'Density',
+                '储存条件': 'Storage',
+                'MDL号': 'MDL',
+                'PubChem_CID': 'PubChem_CID',
+                'Beilstein编号': 'Beilstein',
+                'EINECS编号': 'EINECS',
+                'IUPAC_Name': 'IUPAC_Name',
+                'INCHI': 'INCHI',
+                'Inchi_Key': 'Inchi_Key',
+                'MDL': 'MDL',
+                'PubChem': 'PubChem_CID',
+                'Beilstein': 'Beilstein',
+                'EINECS': 'EINECS',
+                'IUPAC': 'IUPAC_Name',
+                '危化品等级': 'DANGE_CLASS',
+                '是否危化品': 'IS_SAFETY',
+                '图片链接1': 'IMAGELINK1_1',
+                '图片链接2': 'IMAGELINK1_2',
+                '图片链接3': 'IMAGELINK1_3'
+            }
+
+    redis_url = "redis://:zhanglin@127.0.0.1:6379/10"
+    r = redis.StrictRedis.from_url(redis_url, decode_responses=True)
+    cursor = db.cursor()
+    # get_url()
+    list_urls = r.lrange('links', 0, -1)
+    for d_url in list_urls:
+        print(d_url)
+        parse_detail(d_url)

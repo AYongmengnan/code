@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>index</title>
+</head>
+<body>
+    <h1>hello M</h1>
+    <ul>
+        {% for student in students %}
+        <li>姓名：{{ student.name }}，年龄：{{ student.age }}，学号：{{ student.sno }}</li>
+        {% endfor %}
+    </ul>
+</body>
+</html>
